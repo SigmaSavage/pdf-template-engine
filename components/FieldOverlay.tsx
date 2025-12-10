@@ -17,10 +17,13 @@ interface Point {
 export default function FieldOverlay({ pageNumber }: FieldOverlayProps) {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const addCurrentField = useTemplateStore((state) => state.addCurrentField);
+  const currentFields = useTemplateStore((state) => state.currentFields);
 
   const [isDragging, setIsDragging] = useState(false);
   const [start, setStart] = useState<Point | null>(null);
   const [current, setCurrent] = useState<Point | null>(null);
+
+  const overlayRect = overlayRef.current?.getBoundingClientRect();
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!overlayRef.current) return;
@@ -123,6 +126,29 @@ export default function FieldOverlay({ pageNumber }: FieldOverlayProps) {
           style={previewStyle}
         />
       )}
+      {/* Persistent field rectangles for this page */}
+    {overlayRect &&
+      currentFields
+        .filter((field) => field.page === pageNumber - 1)
+        .map((field) => {
+          const left = field.x * overlayRect.width;
+          const top = field.y * overlayRect.height;
+          const width = field.width * overlayRect.width;
+          const height = field.height * overlayRect.height;
+
+          return (
+            <div
+              key={field.id}
+              className="absolute border border-emerald-400/80 bg-emerald-500/10 pointer-events-none"
+              style={{ left, top, width, height }}
+            >
+              {/* Label tag */}
+              <div className="absolute -top-4 left-0 text-[10px] px-1 rounded bg-slate-950/90 border border-emerald-500/60 text-emerald-300 font-mono">
+                {field.key}
+              </div>
+            </div>
+          );
+        })}
     </div>
   );
 }

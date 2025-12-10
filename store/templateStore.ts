@@ -15,6 +15,9 @@ interface TemplateState {
   // NEW helpers
   setCurrentFields: (fields: PdfField[]) => void;
   addCurrentField: (field: PdfField) => void;
+  updateCurrentField: (id: string, patch:Partial<PdfField>) => void;
+  removeCurrentField: (id: string) => void;
+  
 }
 
 export const useTemplateStore = create<TemplateState>((set) => ({
@@ -38,4 +41,16 @@ export const useTemplateStore = create<TemplateState>((set) => ({
 
   addCurrentField: (field) =>
     set((state) => ({ currentFields: [...state.currentFields, field] })),
+
+  updateCurrentField: (id, patch) =>
+    set((state) => ({
+      currentFields: state.currentFields.map((f) =>
+        f.id === id ? { ...f, ...patch } : f
+      ),
+    })),
+
+  removeCurrentField: (id) =>
+    set((state) => ({
+      currentFields: state.currentFields.filter((f) => f.id !== id),
+    })),
 }));
