@@ -16,8 +16,8 @@ export interface PdfField {
 export interface PdfTemplate {
   id: string;
   name: string;
-  pdfPath: string; // where the original PDF is stored
+  pdfData: ArrayBuffer;      // raw PDF bytes for filling later
   fields: PdfField[];
-  schemaKeys: string[]; // e.g. ["owner_name", "address", ...]
+  schemaKeys: string[];
   createdAt: string;
 }

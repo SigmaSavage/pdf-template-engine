@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import * as pdfjsLib from "pdfjs-dist/build/pdf";
 import FieldOverlay from "@/components/FieldOverlay";
+import { useTemplateStore } from "@/store/templateStore";
+
 
 // Configure worker to always match the installed pdfjs-dist version
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -22,6 +24,8 @@ export default function PdfCanvas({ className }: PdfCanvasProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+    const setCurrentPdf = useTemplateStore((state) => state.setCurrentPdf);
+
     // Load PDF from file input
     const handleFileChange = async (
         event: React.ChangeEvent<HTMLInputElement>
@@ -39,6 +43,8 @@ export default function PdfCanvas({ className }: PdfCanvasProps) {
 
         try {
             const arrayBuffer = await file.arrayBuffer();
+            // Save PDF in global store so templates can use it
+            setCurrentPdf(arrayBuffer, file.name);
             const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
             const pdf = await loadingTask.promise;
             setPdfDoc(pdf);

@@ -5,24 +5,31 @@ interface TemplateState {
   templates: PdfTemplate[];
   activeTemplateId: string | null;
 
-  // NEW: fields you’re currently designing on the PDF
+  // PDF currently loaded in the designer
+  currentPdfData: ArrayBuffer | null;
+  currentPdfName: string | null;
+
   currentFields: PdfField[];
 
   setActiveTemplate: (id: string | null) => void;
   addTemplate: (template: PdfTemplate) => void;
   updateTemplateFields: (id: string, fields: PdfField[]) => void;
 
-  // NEW helpers
+  setCurrentPdf: (data: ArrayBuffer, name: string) => void;
+
   setCurrentFields: (fields: PdfField[]) => void;
   addCurrentField: (field: PdfField) => void;
-  updateCurrentField: (id: string, patch:Partial<PdfField>) => void;
+  updateCurrentField: (id: string, patch: Partial<PdfField>) => void;
   removeCurrentField: (id: string) => void;
-  
 }
 
 export const useTemplateStore = create<TemplateState>((set) => ({
   templates: [],
   activeTemplateId: null,
+
+  currentPdfData: null,
+  currentPdfName: null,
+
   currentFields: [],
 
   setActiveTemplate: (id) => set({ activeTemplateId: id }),
@@ -36,6 +43,14 @@ export const useTemplateStore = create<TemplateState>((set) => ({
         t.id === id ? { ...t, fields } : t
       ),
     })),
+
+  setCurrentPdf: (data, name) =>
+    set({
+      currentPdfData: data,
+      currentPdfName: name,
+      // optional: reset fields when new PDF is loaded
+      currentFields: [],
+    }),
 
   setCurrentFields: (fields) => set({ currentFields: fields }),
 
