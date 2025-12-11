@@ -44,6 +44,20 @@ Benefits:
 
 This repository currently provides:
 
+	- Upload a PDF.
+	- Draw fields visually.
+	- Name and type each field (text, number, date, checkbox).
+	- Save reusable templates in local storage.
+
+	- Choose a saved template.
+	- Enter values for each field.
+	- Generate and preview/download the filled PDF.
+
+	- `fillPdfFromTemplate({ pdfBytes, fields, data })` uses pdf-lib to write values into a PDF.
+### UI vs headless modes
+
+This repository currently provides:
+
 - A **Designer UI** (at `/designer`):
 	- Upload a PDF.
 	- Draw fields visually.
@@ -52,11 +66,15 @@ This repository currently provides:
 
 - A **Filler UI** (at `/fill`):
 	- Choose a saved template.
-	- Enter values for each field.
-	- Generate and preview/download the filled PDF.
+	- See a **live pdf.js canvas preview** with an interactive overlay.
+	- Enter values for each schema key in a data card.
+	- Hover a data row to **highlight the matching field box** in the preview and show a key flag.
+	- Click a data row to select the matching field box for **move/resize and per-field styling**.
+	- Adjust layout and style from the Filler and **save changes back to the current template or as a new template**.
+	- Generate and download a filled PDF that matches the live preview.
 
 - A **headless core engine** (already implemented internally in `lib/pdfEngine.ts`):
-	- `fillPdfFromTemplate({ pdfBytes, fields, data })` uses pdf-lib to write values into a PDF.
+	- `fillPdfFromTemplate({ pdfBytes, fields, data })` uses pdf-lib to write values into a PDF, respecting basic style metadata on each field.
 
 In the future, these pieces will be exposed as a **proper NPM package** so you can:
 
@@ -76,18 +94,48 @@ This repo is currently a Next.js 16 app (App Router) that doubles as a playgroun
 
 ### Install dependencies
 
-```bash
-npm install
+### Fields
+
+```ts
+export type PdfFieldType = "text" | "number" | "date" | "checkbox";
+
+export interface PdfFieldStyle {
+	fontSize?: number;        // optional font size override
+	color?: string;           // optional text color (hex)
+	fontWeight?: "normal" | "bold";
+	textAlign?: "left" | "center" | "right";
+}
+
+export interface PdfField {
+	id: string;
+	page: number;
+	x: number;      // 0..1, left
+	y: number;      // 0..1, top
+	width: number;  // 0..1, relative to page width
+	height: number; // 0..1, relative to page height
+	key: string;    // schema key
+	type: PdfFieldType;
+	style?: PdfFieldStyle; // optional style used by preview + filling
+}
 ```
 
+Notes:
+
+- `page` is zero-based (0 = first page).
+- `x, y` are normalized from the **top-left** corner of the page.
+- `width, height` are normalized against the full page size.
+- `key` is the logical name used when you later fill the template (e.g. `customerName`).
+- `style` is optional; when absent, the app falls back to default font size and color.
 ### Start the development server
 
-```bash
+	- `app/fill/page.tsx` – main Filler UI with live preview and interactive overlay.
 npm run dev
 ```
 
-Then open http://localhost:3000 in your browser.
-
+	- `PdfCanvas` – renders PDFs (via pdf.js) and hosts the Designer overlay.
+	- `FieldOverlay` – Designer overlay for drawing, selecting, moving, resizing fields.
+	- `FillPreviewCanvas` – Filler-side pdf.js canvas preview.
+	- `FillOverlay` – Filler overlay for visualizing and adjusting fields while filling.
 Key routes:
 
 - `/designer` – PDF Template Designer.

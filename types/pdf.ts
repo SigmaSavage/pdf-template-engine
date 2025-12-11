@@ -2,6 +2,13 @@
 
 export type PdfFieldType = "text" | "number" | "date" | "checkbox";
 
+export interface PdfFieldStyle {
+  fontSize?: number; // PDF points
+  color?: string; // hex color, e.g. "#000000"
+  fontWeight?: "normal" | "bold";
+  textAlign?: "left" | "center" | "right";
+}
+
 export interface PdfField {
   id: string;
   page: number;
@@ -11,6 +18,7 @@ export interface PdfField {
   height: number;
   key: string;
   type: PdfFieldType;
+  style?: PdfFieldStyle;
 }
 
 export interface PdfTemplate {

@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useTemplateStore } from "@/store/templateStore";
 import { fillPdfFromTemplate } from "@/lib/pdfEngine";
 import type { PdfTemplate, PdfFieldType } from "@/types/pdf";
+import FillPreviewCanvas from "@/components/FillPreviewCanvas";
+import { v4 as uuidv4 } from "uuid";
 
 type ValueMap = Record<string, string | number | boolean>;
 
@@ -20,17 +22,48 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 export default function FillPage() {
   const templates = useTemplateStore((state) => state.templates);
+  const updateTemplateFields = useTemplateStore(
+    (state) => state.updateTemplateFields
+  );
+  const addTemplate = useTemplateStore((state) => state.addTemplate);
+  const updateTemplate = useTemplateStore((state) => state.updateTemplate);
+  const setActiveTemplate = useTemplateStore((state) => state.setActiveTemplate);
+  const clearCurrent = useTemplateStore((state) => state.clearCurrent);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [values, setValues] = useState<ValueMap>({});
   const [isFilling, setIsFilling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const [defaultFontSize, setDefaultFontSize] = useState<number>(10);
+  const [defaultColor, setDefaultColor] = useState<string>("#000000");
+  const [workingFields, setWorkingFields] = useState<PdfTemplate["fields"]>([]);
+  const [hasLayoutChanges, setHasLayoutChanges] = useState(false);
+  const [layoutSaveMessage, setLayoutSaveMessage] = useState<string | null>(null);
+  const [newTemplateName, setNewTemplateName] = useState<string>("");
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
 
   const selectedTemplate: PdfTemplate | null = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
     [templates, selectedTemplateId]
   );
+
+  // Keep a local, editable copy of fields for this template
+  useEffect(() => {
+    if (selectedTemplate) {
+      setWorkingFields(selectedTemplate.fields.map((f) => ({ ...f })));
+      setHasLayoutChanges(false);
+      setLayoutSaveMessage(null);
+      setNewTemplateName(`${selectedTemplate.name} (Adjusted)`);
+      setHighlightKey(null);
+    } else {
+      setWorkingFields([]);
+      setHasLayoutChanges(false);
+      setLayoutSaveMessage(null);
+      setNewTemplateName("");
+      setHighlightKey(null);
+    }
+  }, [selectedTemplateId, selectedTemplate?.id, selectedTemplate?.name]);
 
   // Map each schema key to its primary field type
   const keyTypes: Record<string, PdfFieldType> = useMemo(() => {
@@ -91,10 +124,21 @@ export default function FillPage() {
       }
 
       const pdfBytes = base64ToUint8Array(selectedTemplate.pdfDataBase64);
+      const effectiveFields = workingFields.map((field) => {
+        const style = field.style ?? {};
+        return {
+          ...field,
+          style: {
+            ...style,
+            fontSize: style.fontSize ?? defaultFontSize,
+            color: style.color ?? defaultColor,
+          },
+        };
+      });
 
       const filledBytes = await fillPdfFromTemplate({
         pdfBytes,
-        fields: selectedTemplate.fields,
+        fields: effectiveFields,
         data,
       });
 
@@ -113,55 +157,6 @@ export default function FillPage() {
     } catch (err) {
       console.error(err);
       setErrorMessage("Failed to generate filled PDF. Check console for details.");
-    } finally {
-      setIsFilling(false);
-    }
-  };
-
-  const handlePreview = async () => {
-    setErrorMessage(null);
-
-    if (!selectedTemplate) {
-      setErrorMessage("Select a template first.");
-      return;
-    }
-
-    if (!selectedTemplate.pdfDataBase64) {
-      setErrorMessage("This template has no PDF data attached.");
-      return;
-    }
-
-    try {
-      setIsFilling(true);
-
-      const data: ValueMap = {};
-      for (const key of selectedTemplate.schemaKeys) {
-        const v = values[key];
-        data[key] = v ?? "";
-      }
-
-      const pdfBytes = base64ToUint8Array(selectedTemplate.pdfDataBase64);
-
-      const filledBytes = await fillPdfFromTemplate({
-        pdfBytes,
-        fields: selectedTemplate.fields,
-        data,
-      });
-
-      const blob = new Blob([filledBytes.buffer as ArrayBuffer], {
-        type: "application/pdf",
-      });
-      const url = URL.createObjectURL(blob);
-
-      // Revoke old preview URL if present
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-
-      setPreviewUrl(url);
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Failed to generate preview. Check console for details.");
     } finally {
       setIsFilling(false);
     }
@@ -187,8 +182,8 @@ export default function FillPage() {
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-1 md:grid-cols-[1.5fr,1.2fr] gap-4">
-        {/* Left: Template selection + info */}
+      <main className="flex-1 flex flex-col gap-4">
+        {/* 1: Template selection + info */}
         <section className="border border-slate-800 rounded-lg p-3 space-y-3">
           <h2 className="text-lg font-medium">1. Choose a Template</h2>
 
@@ -227,10 +222,239 @@ export default function FillPage() {
             </>
           )}
         </section>
-
-        {/* Right: Data entry + generate */}
+        {/* 2: Live preview + style controls */}
         <section className="border border-slate-800 rounded-lg p-3 space-y-3">
-          <h2 className="text-lg font-medium">2. Enter Values</h2>
+          <h2 className="text-lg font-medium">2. Preview & Style</h2>
+
+          {!selectedTemplate ? (
+            <p className="text-sm text-slate-400">
+              Select a template to see a live PDF preview and style controls.
+            </p>
+          ) : selectedTemplate.fields.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              This template has no fields yet. Add fields in the Designer to see them
+              here.
+            </p>
+          ) : (
+            <div className="flex flex-col md:flex-row gap-3 h-80">
+              <div className="flex-1 min-w-0">
+                <FillPreviewCanvas
+                  template={selectedTemplate}
+                  fields={workingFields}
+                  values={values}
+                  selectedFieldId={selectedFieldId}
+                  onSelectField={setSelectedFieldId}
+                  defaultFontSize={defaultFontSize}
+                  defaultColor={defaultColor}
+                  highlightKey={highlightKey}
+                  onUpdateField={(id, patch) => {
+                    setWorkingFields((prev) =>
+                      prev.map((f) => (f.id === id ? { ...f, ...patch } : f))
+                    );
+                    setHasLayoutChanges(true);
+                    setLayoutSaveMessage(null);
+                  }}
+                />
+              </div>
+
+              <div className="w-full md:w-60 shrink-0 border border-slate-800 rounded-md p-2 text-xs space-y-3 bg-slate-950/80">
+                <div className="space-y-1">
+                  <div className="font-semibold text-slate-200 text-[11px]">
+                    Default text style
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-14 text-slate-400">Font size</span>
+                    <input
+                      type="number"
+                      className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-20 text-[11px]"
+                      value={defaultFontSize}
+                      min={6}
+                      max={48}
+                      onChange={(e) => {
+                        const n = Number(e.target.value) || 10;
+                        setDefaultFontSize(n);
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-14 text-slate-400">Color</span>
+                    <input
+                      type="color"
+                      className="w-8 h-5"
+                      value={defaultColor}
+                      onChange={(e) => setDefaultColor(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Used when a field has no explicit style.
+                  </p>
+                </div>
+
+                {(() => {
+                  const field = workingFields.find(
+                    (f) => f.id === selectedFieldId
+                  );
+                  if (!field) return null;
+                  const fieldFontSize = field.style?.fontSize ?? defaultFontSize;
+                  const fieldColor = field.style?.color ?? defaultColor;
+
+                  return (
+                    <div className="pt-2 border-t border-slate-800 space-y-2">
+                      <div className="font-semibold text-slate-200 text-[11px]">
+                        Field style: <span className="font-mono">{field.key}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-14 text-slate-400">Font size</span>
+                        <input
+                          type="number"
+                          className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-20 text-[11px]"
+                          value={fieldFontSize}
+                          min={6}
+                          max={72}
+                          onChange={(e) => {
+                            const n = Number(e.target.value) || defaultFontSize;
+                            setWorkingFields((prev) =>
+                              prev.map((f) =>
+                                f.id === field.id
+                                  ? {
+                                      ...f,
+                                      style: {
+                                        ...(f.style ?? {}),
+                                        fontSize: n,
+                                      },
+                                    }
+                                  : f
+                              )
+                            );
+                            setHasLayoutChanges(true);
+                            setLayoutSaveMessage(null);
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-14 text-slate-400">Color</span>
+                        <input
+                          type="color"
+                          className="w-8 h-5"
+                          value={fieldColor}
+                          onChange={(e) => {
+                            const nextColor = e.target.value || defaultColor;
+                                setWorkingFields((prev) =>
+                                  prev.map((f) =>
+                                    f.id === field.id
+                                      ? {
+                                          ...f,
+                                          style: {
+                                            ...(f.style ?? {}),
+                                            color: nextColor,
+                                          },
+                                        }
+                                      : f
+                                  )
+                                );
+                                setHasLayoutChanges(true);
+                                setLayoutSaveMessage(null);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {hasLayoutChanges && (
+                  <div className="mt-3 pt-2 border-t border-slate-800 space-y-2 text-[11px]">
+                    <div className="text-amber-300">
+                      You have unsaved layout/style changes for this template.
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-[11px] font-medium text-white"
+                          onClick={() => {
+                            if (!selectedTemplate) return;
+                            const now = new Date().toISOString();
+                            updateTemplateFields(
+                              selectedTemplate.id,
+                              workingFields
+                            );
+                            updateTemplate({
+                              ...selectedTemplate,
+                              fields: workingFields,
+                              updatedAt: now,
+                            });
+                            setActiveTemplate(selectedTemplate.id);
+                            clearCurrent();
+                            setHasLayoutChanges(false);
+                            setLayoutSaveMessage("Template updated.");
+                          }}
+                        >
+                          Save changes to current template
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-20 text-slate-400">New name</span>
+                          <input
+                            type="text"
+                            className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:border-sky-500"
+                            value={newTemplateName}
+                            onChange={(e) => setNewTemplateName(e.target.value)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="px-3 py-1 rounded border border-slate-600 text-[11px] font-medium text-slate-200 hover:bg-slate-800"
+                          onClick={() => {
+                            if (!selectedTemplate) return;
+                            const trimmed = newTemplateName.trim();
+                            if (!trimmed) {
+                              setLayoutSaveMessage(
+                                "Enter a name for the new template."
+                              );
+                              return;
+                            }
+                            const now = new Date().toISOString();
+                            const id = uuidv4();
+                            const schemaKeys = Array.from(
+                              new Set(workingFields.map((f) => f.key))
+                            );
+                            const newTemplate: PdfTemplate = {
+                              id,
+                              name: trimmed,
+                              pdfDataBase64: selectedTemplate.pdfDataBase64,
+                              fields: workingFields,
+                              schemaKeys,
+                              createdAt: now,
+                              updatedAt: now,
+                            };
+                            addTemplate(newTemplate);
+                            setActiveTemplate(id);
+                            setSelectedTemplateId(id);
+                            clearCurrent();
+                            setHasLayoutChanges(false);
+                            setLayoutSaveMessage("New template created.");
+                          }}
+                        >
+                          Save as new template
+                        </button>
+                      </div>
+                      {layoutSaveMessage && (
+                        <div className="text-[10px] text-slate-400">
+                          {layoutSaveMessage}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 3: Data entry + generate */}
+        <section className="border border-slate-800 rounded-lg p-3 space-y-3">
+          <h2 className="text-lg font-medium">3. Enter Values & Download</h2>
 
           {!selectedTemplate ? (
             <p className="text-sm text-slate-400">
@@ -251,7 +475,28 @@ export default function FillPage() {
                   return (
                     <div
                       key={key}
-                      className="flex items-center gap-2 border border-slate-800 rounded px-2 py-1"
+                      className={`flex items-center gap-2 border rounded px-2 py-1 cursor-pointer transition-colors duration-150 ${
+                        highlightKey === key
+                          ? "border-sky-500 bg-sky-500/10"
+                          : "border-slate-800 bg-transparent"
+                      }`}
+                      onMouseEnter={() => {
+                        setHighlightKey(key);
+                      }}
+                      onMouseLeave={() => {
+                        setHighlightKey((current) =>
+                          current === key ? null : current
+                        );
+                      }}
+                      onClick={() => {
+                        setHighlightKey(key);
+                        const fieldForKey = workingFields.find(
+                          (f) => f.key === key
+                        );
+                        if (fieldForKey) {
+                          setSelectedFieldId(fieldForKey.id);
+                        }
+                      }}
                     >
                       <div className="flex-1">
                         <div className="text-[11px] font-mono text-slate-300">
@@ -297,28 +542,11 @@ export default function FillPage() {
                   >
                     {isFilling ? "Working…" : "Download Filled PDF"}
                   </button>
-                  <button
-                    className="px-3 py-2 rounded border border-slate-600 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
-                    onClick={handlePreview}
-                    disabled={!selectedTemplate || isFilling}
-                  >
-                    Preview
-                  </button>
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Download or preview the filled PDF.
+                  Download a flattened PDF that matches the live preview.
                 </p>
               </div>
-
-              {previewUrl && (
-                <div className="mt-3 border border-slate-800 rounded bg-slate-950 overflow-hidden h-80">
-                  <iframe
-                    src={previewUrl}
-                    className="w-full h-full"
-                    title="Filled PDF Preview"
-                  />
-                </div>
-              )}
             </>
           )}
         </section>

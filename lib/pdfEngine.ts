@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PdfField } from "@/types/pdf";
 
 type FillData = Record<string, string | number | boolean>;
@@ -12,6 +12,19 @@ function parseCheckboxValue(value: string | number | boolean): boolean {
   if (typeof value === "number") return value !== 0;
   const v = String(value).trim().toLowerCase();
   return ["true", "yes", "y", "1", "on", "x", "checked"].includes(v);
+}
+
+function hexToRgbColor(hex?: string) {
+  if (!hex) return rgb(0, 0, 0);
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return rgb(0, 0, 0);
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return rgb(0, 0, 0);
+  }
+  return rgb(r / 255, g / 255, b / 255);
 }
 
 export async function fillPdfFromTemplate(options: {
@@ -37,7 +50,8 @@ export async function fillPdfFromTemplate(options: {
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
     // Your field.x/y/width/height are normalized [0..1] from top-left.
-    const fontSize = 10;
+    const fontSize = field.style?.fontSize ?? 10;
+    const color = hexToRgbColor(field.style?.color);
 
     const px = field.x * pageWidth;
     const pyTop = field.y * pageHeight;
@@ -54,6 +68,7 @@ export async function fillPdfFromTemplate(options: {
           y: baselineY,
           size: fontSize,
           font,
+          color,
         });
       }
     } else {
@@ -63,6 +78,7 @@ export async function fillPdfFromTemplate(options: {
         y: baselineY,
         size: fontSize,
         font,
+        color,
       });
     }
   }
