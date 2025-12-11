@@ -3,6 +3,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 
 import PdfCanvas from "@/components/PdfCanvas";
 import { useTemplateStore } from "@/store/templateStore";
@@ -13,8 +14,8 @@ export default function DesignerPage() {
 
   const currentFields = useTemplateStore((state) => state.currentFields);
   const updateCurrentField = useTemplateStore((state) => state.updateCurrentField);
-  const removeCurrentField = useTemplateStore((state) => state.removeCurrentField)
-  const currentPdfData = useTemplateStore((state) => state.currentPdfData);
+  const removeCurrentField = useTemplateStore((state) => state.removeCurrentField);
+  const currentPdfDataBase64 = useTemplateStore((state) => state.currentPdfDataBase64);
   const currentPdfName = useTemplateStore((state) => state.currentPdfName);
   const addTemplate = useTemplateStore((state) => state.addTemplate);
 
@@ -26,13 +27,8 @@ export default function DesignerPage() {
     setSaveMessage(null);
     setSaveError(null);
 
-    if (!currentPdfData) {
+    if (!currentPdfDataBase64) {
       setSaveError("Upload a PDF before saving a template.");
-      return;
-    }
-
-    if (currentFields.length === 0) {
-      setSaveError("Create at least one field on the PDF before saving.");
       return;
     }
 
@@ -50,7 +46,7 @@ export default function DesignerPage() {
     const newTemplate = {
       id: uuidv4(),
       name: trimmedName,
-      pdfData: currentPdfData,
+      pdfDataBase64: currentPdfDataBase64,
       fields: currentFields,
       schemaKeys,
       createdAt: new Date().toISOString(),
@@ -68,8 +64,20 @@ export default function DesignerPage() {
   return (
     <div className="min-h-screen flex flex-col gap-4 p-6">
       <header className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <h1 className="text-2xl font-semibold">PDF Template Designer</h1>
-        <span className="text-sm text-slate-400">MVP • v0.1</span>
+        <div>
+          <h1 className="text-2xl font-semibold">PDF Template Designer</h1>
+          <p className="text-sm text-slate-400">
+            Upload a PDF, define fields, and save as a reusable template.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <Link
+            href="/fill"
+            className="px-3 py-1 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+          >
+            Go to Fill &amp; Review →
+          </Link>
+        </div>
       </header>
 
       <main className="flex-1 grid grid-cols-1 md:grid-cols-[2fr,1fr] gap-4">
@@ -95,7 +103,7 @@ export default function DesignerPage() {
               <button
                 className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-medium text-white disabled:opacity-50"
                 onClick={handleSaveTemplate}
-                disabled={!currentPdfData || currentFields.length === 0}
+                disabled={!currentPdfDataBase64 || currentFields.length === 0}
               >
                 Save Template
               </button>

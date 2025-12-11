@@ -16,7 +16,7 @@ export interface PdfField {
 export interface PdfTemplate {
   id: string;
   name: string;
-  pdfData: ArrayBuffer;      // raw PDF bytes for filling later
+  pdfDataBase64: string;   // base64-encoded PDF bytes
   fields: PdfField[];
   schemaKeys: string[];
   createdAt: string;
