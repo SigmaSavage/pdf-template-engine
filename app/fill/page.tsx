@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTemplateStore } from "@/store/templateStore";
@@ -21,7 +21,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-export default function FillPage() {
+function FillPageInner() {
   const templates = useTemplateStore((state) => state.templates);
   const updateTemplateFields = useTemplateStore(
     (state) => state.updateTemplateFields
@@ -565,5 +565,18 @@ export default function FillPage() {
         </section>
       </main>
     </div>
+  );
+}
+export default function FillPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center p-6 text-sm text-slate-400">
+          Loading Fill &amp; Review…
+        </div>
+      }
+    >
+      <FillPageInner />
+    </Suspense>
   );
 }
