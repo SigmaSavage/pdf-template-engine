@@ -20,4 +20,5 @@ export interface PdfTemplate {
   fields: PdfField[];
   schemaKeys: string[];
   createdAt: string;
+  updatedAt?: string;
 }

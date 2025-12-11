@@ -25,6 +25,7 @@ export default function FillPage() {
   const [values, setValues] = useState<ValueMap>({});
   const [isFilling, setIsFilling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const selectedTemplate: PdfTemplate | null = useMemo(
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
@@ -97,7 +98,9 @@ export default function FillPage() {
         data,
       });
 
-      const blob = new Blob([filledBytes.buffer as ArrayBuffer], { type: "application/pdf" });
+      const blob = new Blob([filledBytes.buffer as ArrayBuffer], {
+        type: "application/pdf",
+      });
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement("a");
@@ -110,6 +113,55 @@ export default function FillPage() {
     } catch (err) {
       console.error(err);
       setErrorMessage("Failed to generate filled PDF. Check console for details.");
+    } finally {
+      setIsFilling(false);
+    }
+  };
+
+  const handlePreview = async () => {
+    setErrorMessage(null);
+
+    if (!selectedTemplate) {
+      setErrorMessage("Select a template first.");
+      return;
+    }
+
+    if (!selectedTemplate.pdfDataBase64) {
+      setErrorMessage("This template has no PDF data attached.");
+      return;
+    }
+
+    try {
+      setIsFilling(true);
+
+      const data: ValueMap = {};
+      for (const key of selectedTemplate.schemaKeys) {
+        const v = values[key];
+        data[key] = v ?? "";
+      }
+
+      const pdfBytes = base64ToUint8Array(selectedTemplate.pdfDataBase64);
+
+      const filledBytes = await fillPdfFromTemplate({
+        pdfBytes,
+        fields: selectedTemplate.fields,
+        data,
+      });
+
+      const blob = new Blob([filledBytes.buffer as ArrayBuffer], {
+        type: "application/pdf",
+      });
+      const url = URL.createObjectURL(blob);
+
+      // Revoke old preview URL if present
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+
+      setPreviewUrl(url);
+    } catch (err) {
+      console.error(err);
+      setErrorMessage("Failed to generate preview. Check console for details.");
     } finally {
       setIsFilling(false);
     }
@@ -236,18 +288,37 @@ export default function FillPage() {
                 <p className="text-xs text-red-400">{errorMessage}</p>
               )}
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-                <button
-                  className="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white disabled:opacity-50"
-                  onClick={handleGenerate}
-                  disabled={!selectedTemplate || isFilling}
-                >
-                  {isFilling ? "Generating…" : "Generate Filled PDF"}
-                </button>
+              <div className="flex items-center justify-between pt-2 border-t border-slate-800 gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    className="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white disabled:opacity-50"
+                    onClick={handleGenerate}
+                    disabled={!selectedTemplate || isFilling}
+                  >
+                    {isFilling ? "Working…" : "Download Filled PDF"}
+                  </button>
+                  <button
+                    className="px-3 py-2 rounded border border-slate-600 text-xs font-medium text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+                    onClick={handlePreview}
+                    disabled={!selectedTemplate || isFilling}
+                  >
+                    Preview
+                  </button>
+                </div>
                 <p className="text-[11px] text-slate-500">
-                  The filled PDF will be downloaded to your device.
+                  Download or preview the filled PDF.
                 </p>
               </div>
+
+              {previewUrl && (
+                <div className="mt-3 border border-slate-800 rounded bg-slate-950 overflow-hidden h-80">
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full"
+                    title="Filled PDF Preview"
+                  />
+                </div>
+              )}
             </>
           )}
         </section>

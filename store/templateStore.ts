@@ -24,9 +24,14 @@ interface TemplateState {
 
   setActiveTemplate: (id: string | null) => void;
   addTemplate: (template: PdfTemplate) => void;
+  updateTemplate: (template: PdfTemplate) => void;
   updateTemplateFields: (id: string, fields: PdfField[]) => void;
+  deleteTemplate: (id: string) => void;
+  duplicateTemplate: (id: string) => void;
 
   setCurrentPdf: (data: ArrayBuffer, name: string) => void;
+
+  clearCurrent: () => void;
 
   setCurrentFields: (fields: PdfField[]) => void;
   addCurrentField: (field: PdfField) => void;
@@ -50,6 +55,13 @@ export const useTemplateStore = create<TemplateState>()(
       addTemplate: (template) =>
         set((state) => ({ templates: [...state.templates, template] })),
 
+      updateTemplate: (template) =>
+        set((state) => ({
+          templates: state.templates.map((t) =>
+            t.id === template.id ? template : t
+          ),
+        })),
+
       updateTemplateFields: (id, fields) =>
         set((state) => ({
           templates: state.templates.map((t) =>
@@ -57,11 +69,58 @@ export const useTemplateStore = create<TemplateState>()(
           ),
         })),
 
+      deleteTemplate: (id) =>
+        set((state) => {
+          const remaining = state.templates.filter((t) => t.id !== id);
+
+          // If we're deleting the active template, also clear the
+          // currently loaded PDF and fields so the Designer doesn't show
+          // "ghost" unsaved changes for a template that no longer exists.
+          if (state.activeTemplateId === id) {
+            return {
+              templates: remaining,
+              activeTemplateId: null,
+              currentPdfDataBase64: null,
+              currentPdfName: null,
+              currentFields: [],
+            };
+          }
+
+          return {
+            templates: remaining,
+          };
+        }),
+
+      duplicateTemplate: (id) =>
+        set((state) => {
+          const original = state.templates.find((t) => t.id === id);
+          if (!original) return state;
+
+          const now = new Date().toISOString();
+          const copy: PdfTemplate = {
+            ...original,
+            id: `${original.id}-copy-${Date.now()}`,
+            name: `${original.name} (Copy)`,
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          return {
+            ...state,
+            templates: [...state.templates, copy],
+          };
+        }),
+
       setCurrentPdf: (data, name) =>
         set({
           currentPdfDataBase64: arrayBufferToBase64(data),
           currentPdfName: name,
-          // optional: clear current fields when new PDF is loaded
+        }),
+
+      clearCurrent: () =>
+        set({
+          currentPdfDataBase64: null,
+          currentPdfName: null,
           currentFields: [],
         }),
 
