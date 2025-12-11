@@ -87,3 +87,54 @@ export async function fillPdfFromTemplate(options: {
   const filledPdfBytes = await pdfDoc.save();
   return filledPdfBytes;
 }
+
+export async function exportFillablePdfFromTemplate(options: {
+  pdfBytes: Uint8Array | ArrayBuffer;
+  fields: PdfField[];
+}) {
+  const { pdfBytes, fields } = options;
+  const uint8 = toUint8Array(pdfBytes);
+  const pdfDoc = await PDFDocument.load(uint8);
+  const pages = pdfDoc.getPages();
+
+  const form = pdfDoc.getForm();
+
+  const nameCounts: Record<string, number> = {};
+
+  for (const field of fields) {
+    const page = pages[field.page] ?? pages[0];
+    const { width: pageWidth, height: pageHeight } = page.getSize();
+
+    const baseName = (field.key || "field").trim() || "field";
+    const count = nameCounts[baseName] ?? 0;
+    nameCounts[baseName] = count + 1;
+    const fieldName = count === 0 ? baseName : `${baseName}_${count + 1}`;
+
+    const px = field.x * pageWidth;
+    const rectWidth = field.width * pageWidth;
+    const rectHeight = field.height * pageHeight;
+    const pyTop = field.y * pageHeight;
+    const y = pageHeight - pyTop - rectHeight;
+
+    if (field.type === "checkbox") {
+      const checkBox = form.createCheckBox(fieldName);
+      checkBox.addToPage(page, {
+        x: px,
+        y,
+        width: Math.max(12, rectWidth),
+        height: Math.max(12, rectHeight),
+      });
+    } else {
+      const textField = form.createTextField(fieldName);
+      textField.addToPage(page, {
+        x: px,
+        y,
+        width: rectWidth,
+        height: rectHeight,
+      });
+    }
+  }
+
+  const exportedBytes = await pdfDoc.save();
+  return exportedBytes;
+}

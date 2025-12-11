@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import PdfCanvas from "@/components/PdfCanvas";
 import { useTemplateStore } from "@/store/templateStore";
+import { exportFillablePdfFromTemplate } from "@/lib/pdfEngine";
 import { v4 as uuidv4 } from "uuid";
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -236,6 +237,35 @@ export default function DesignerPage() {
     return () => clearTimeout(timeout);
   }, [saveMessage, hasUnsavedChanges]);
 
+  const handleExportFillable = async () => {
+    if (!activeTemplate) {
+      setSaveError("Select or save a template before exporting a fillable PDF.");
+      return;
+    }
+    try {
+      const bytes = base64ToUint8Array(activeTemplate.pdfDataBase64);
+      const exported = await exportFillablePdfFromTemplate({
+        pdfBytes: bytes,
+        fields: activeTemplate.fields,
+      });
+
+      const blob = new Blob([exported.buffer as ArrayBuffer], {
+        type: "application/pdf",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${activeTemplate.name || "template"}-fillable.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setSaveError("Failed to export fillable PDF. Check console for details.");
+    }
+  };
+
 
   return (
     <div className="min-h-screen flex flex-col gap-4 p-6">
@@ -332,6 +362,14 @@ export default function DesignerPage() {
               >
                 Save Template
               </button>
+              <button
+                className="px-3 py-1 rounded border border-slate-600 text-xs font-medium text-slate-100 hover:bg-slate-800 disabled:opacity-40"
+                type="button"
+                onClick={handleExportFillable}
+                disabled={!activeTemplate || activeTemplate.fields.length === 0}
+              >
+                Export fillable PDF
+              </button>
             </div>
 
             {saveError && (
@@ -354,8 +392,9 @@ export default function DesignerPage() {
               save the template when you're ready.
             </p>
           ) : (
-            <ul className="space-y-2 text-sm">
-              {currentFields.map((field) => (
+            <div className="max-h-[55vh] overflow-auto pr-1">
+              <ul className="space-y-2 text-sm">
+                {currentFields.map((field) => (
                 <li
                   key={field.id}
                   className="rounded border border-slate-700 px-2 py-2 space-y-1"
@@ -400,8 +439,9 @@ export default function DesignerPage() {
                     {field.height.toFixed(2)}
                   </div>
                 </li>
-              ))}
-            </ul>
+                ))}
+              </ul>
+            </div>
           )}
         </aside>
 

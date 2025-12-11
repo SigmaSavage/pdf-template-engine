@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTemplateStore } from "@/store/templateStore";
 import { fillPdfFromTemplate } from "@/lib/pdfEngine";
 import type { PdfTemplate, PdfFieldType } from "@/types/pdf";
@@ -47,6 +48,18 @@ export default function FillPage() {
     () => templates.find((t) => t.id === selectedTemplateId) ?? null,
     [templates, selectedTemplateId]
   );
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const initialId = searchParams.get("templateId");
+    if (!initialId) return;
+    if (selectedTemplateId) return;
+    const exists = templates.some((t) => t.id === initialId);
+    if (!exists) return;
+    setSelectedTemplateId(initialId);
+    setActiveTemplate(initialId);
+  }, [searchParams, selectedTemplateId, templates, setActiveTemplate]);
 
   // Keep a local, editable copy of fields for this template
   useEffect(() => {

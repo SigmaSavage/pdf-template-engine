@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import TemplateThumbnail from "@/components/TemplateThumbnail";
 import { useTemplateStore } from "@/store/templateStore";
+import { exportFillablePdfFromTemplate } from "@/lib/pdfEngine";
 
 function formatDate(value?: string) {
   if (!value) return "-";
@@ -19,6 +20,16 @@ export default function TemplatesLibraryPage() {
   const duplicateTemplate = useTemplateStore((state) => state.duplicateTemplate);
   const setActiveTemplate = useTemplateStore((state) => state.setActiveTemplate);
   const clearCurrent = useTemplateStore((state) => state.clearCurrent);
+
+  function base64ToUint8Array(base64: string): Uint8Array {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
 
   const sorted = [...templates].sort((a, b) => {
     const aTime = Date.parse(a.updatedAt || a.createdAt);
@@ -45,6 +56,39 @@ export default function TemplatesLibraryPage() {
 
   const handleDuplicate = (id: string) => {
     duplicateTemplate(id);
+  };
+
+  const handleFill = (id: string) => {
+    setActiveTemplate(id);
+    clearCurrent();
+    router.push(`/fill?templateId=${id}`);
+  };
+
+  const handleExportFillable = async (id: string) => {
+    const template = templates.find((t) => t.id === id);
+    if (!template) return;
+    try {
+      const bytes = base64ToUint8Array(template.pdfDataBase64);
+      const exported = await exportFillablePdfFromTemplate({
+        pdfBytes: bytes,
+        fields: template.fields,
+      });
+
+      const blob = new Blob([exported.buffer as ArrayBuffer], {
+        type: "application/pdf",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${template.name || "template"}-fillable.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      window.alert("Failed to export fillable PDF. See console for details.");
+    }
   };
 
   return (
@@ -105,10 +149,22 @@ export default function TemplatesLibraryPage() {
                     Edit
                   </button>
                   <button
+                    className="px-2 py-1 rounded border border-sky-600 text-sky-200 hover:bg-slate-900"
+                    onClick={() => handleFill(t.id)}
+                  >
+                    Fill
+                  </button>
+                  <button
                     className="px-2 py-1 rounded border border-slate-600 text-slate-100 hover:bg-slate-800"
                     onClick={() => handleDuplicate(t.id)}
                   >
                     Duplicate
+                  </button>
+                  <button
+                    className="px-2 py-1 rounded border border-emerald-600 text-emerald-200 hover:bg-slate-900"
+                    onClick={() => handleExportFillable(t.id)}
+                  >
+                    Export fillable PDF
                   </button>
                   <button
                     className="ml-auto px-2 py-1 rounded bg-red-700 hover:bg-red-600 text-white"
