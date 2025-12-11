@@ -1,6 +1,6 @@
 ## pdf-template-engine
 
-An in-browser PDF template designer and filler, built as a Next.js app and evolving into a reusable headless and UI library.
+An in-browser PDF template designer and filler built as a Next.js app, evolving into a reusable headless and UI library.
 
 This repository currently serves two purposes:
 
@@ -33,27 +33,13 @@ Typical use cases:
 Each field is stored with normalized coordinates relative to the page size:
 
 - $x, y, width, height \in [0, 1]$ measured from the **top-left** of the page.
-- These normalized values are then mapped to actual pixels when rendering or filling.
+- These normalized values are mapped to actual pixels when rendering or filling.
 
 Benefits:
 
 - Templates are **resolution-independent** and work across devices and render scales.
 - You can resize the canvas or render thumbnails without changing the template JSON.
 
-### UI vs headless modes
-
-This repository currently provides:
-
-	- Upload a PDF.
-	- Draw fields visually.
-	- Name and type each field (text, number, date, checkbox).
-	- Save reusable templates in local storage.
-
-	- Choose a saved template.
-	- Enter values for each field.
-	- Generate and preview/download the filled PDF.
-
-	- `fillPdfFromTemplate({ pdfBytes, fields, data })` uses pdf-lib to write values into a PDF.
 ### UI vs headless modes
 
 This repository currently provides:
@@ -86,13 +72,17 @@ In the future, these pieces will be exposed as a **proper NPM package** so you c
 
 ## Running the app locally
 
-This repo is currently a Next.js 16 app (App Router) that doubles as a playground for the future package.
+This repo is a Next.js 16 app (App Router) that doubles as a playground for the future package.
 
-### Prerequisites
+- Prerequisite: Node.js 18+ recommended.
+- Install dependencies: `npm install`
+- Start the development server: `npm run dev` (opens on http://localhost:3000)
 
-- Node.js 18+ recommended.
+---
 
-### Install dependencies
+## Template JSON format
+
+The core template shape is defined in `types/pdf.ts`.
 
 ### Fields
 
@@ -126,76 +116,6 @@ Notes:
 - `width, height` are normalized against the full page size.
 - `key` is the logical name used when you later fill the template (e.g. `customerName`).
 - `style` is optional; when absent, the app falls back to default font size and color.
-### Start the development server
-
-	- `app/fill/page.tsx` – main Filler UI with live preview and interactive overlay.
-npm run dev
-```
-
-	- `PdfCanvas` – renders PDFs (via pdf.js) and hosts the Designer overlay.
-	- `FieldOverlay` – Designer overlay for drawing, selecting, moving, resizing fields.
-	- `FillPreviewCanvas` – Filler-side pdf.js canvas preview.
-	- `FillOverlay` – Filler overlay for visualizing and adjusting fields while filling.
-Key routes:
-
-- `/designer` – PDF Template Designer.
-- `/fill` – PDF Filler using saved templates.
-- `/templates` – Template Library (thumbnails, duplicate, delete, edit).
-
----
-
-## Current architecture
-
-At a high level, the app is organized as:
-
-- `app/` – Next.js App Router pages:
-	- `app/designer/page.tsx` – main Designer UI.
-	- `app/fill/page.tsx` – main Filler UI.
-	- `app/templates/page.tsx` – Template Library / management.
-
-- `components/` – Reusable UI pieces:
-	- `PdfCanvas` – renders PDFs (via pdf.js) and hosts the field overlay.
-	- `FieldOverlay` – interactive overlay for drawing, selecting, moving, resizing fields.
-	- `FieldEditorModal`, `KeySelector`, etc. – support components for editing fields.
-
-- `store/` – Global state (Zustand):
-	- `store/templateStore.ts` – manages templates, the active template, and current designer state.
-
-- `lib/` – Core logic:
-	- `lib/pdfEngine.ts` – headless filling engine using pdf-lib.
-
-- `types/` – Shared types:
-	- `types/pdf.ts` – `PdfField`, `PdfTemplate`, and related types.
-
----
-
-## Template JSON format
-
-The core template shape is defined in `types/pdf.ts`.
-
-### Fields
-
-```ts
-export type PdfFieldType = "text" | "number" | "date" | "checkbox";
-
-export interface PdfField {
-	id: string;
-	page: number;
-	x: number;      // 0..1, left
-	y: number;      // 0..1, top
-	width: number;  // 0..1, relative to page width
-	height: number; // 0..1, relative to page height
-	key: string;    // schema key
-	type: PdfFieldType;
-}
-```
-
-Notes:
-
-- `page` is zero-based (0 = first page).
-- `x, y` are normalized from the **top-left** corner of the page.
-- `width, height` are normalized against the full page size.
-- `key` is the logical name used when you later fill the template (e.g. `customerName`).
 
 ### Templates
 
@@ -226,6 +146,38 @@ How you might store templates in your own backend:
 
 ---
 
+## Current architecture
+
+At a high level, the app is organized as:
+
+- `app/` - Next.js App Router pages:
+	- `app/designer/page.tsx` - main Designer UI.
+	- `app/fill/page.tsx` - main Filler UI.
+	- `app/templates/page.tsx` - Template Library / management.
+
+- `components/` - Reusable UI pieces:
+	- `PdfCanvas` - renders PDFs (via pdf.js) and hosts the field overlay.
+	- `FieldOverlay` - interactive overlay for drawing, selecting, moving, resizing fields.
+	- `FieldEditorModal`, `KeySelector`, etc. - support components for editing fields.
+	- `FillPreviewCanvas` - Filler-side pdf.js canvas preview.
+	- `FillOverlay` - Filler overlay for visualizing and adjusting fields while filling.
+
+- `store/` - Global state (Zustand):
+	- `store/templateStore.ts` - manages templates, the active template, and current designer state.
+
+- `lib/` - Core logic:
+	- `lib/pdfEngine.ts` - headless filling engine using pdf-lib.
+
+- `types/` - Shared types:
+	- `types/pdf.ts` - `PdfField`, `PdfTemplate`, and related types.
+
+- Key routes:
+	- `/designer` - PDF Template Designer.
+	- `/fill` - PDF Filler using saved templates.
+	- `/templates` - Template Library (thumbnails, duplicate, delete, edit).
+
+---
+
 ## Headless filling engine (current implementation)
 
 The core filling logic already exists in `lib/pdfEngine.ts` as `fillPdfFromTemplate`.
@@ -249,7 +201,7 @@ Behavior:
 - Uses pdf-lib to load the PDF.
 - For each field, computes the text/checkbox position from normalized coordinates.
 - For `checkbox` fields, interprets a variety of truthy values (`true`, `"yes"`, `1`, `"on"`, etc.).
-- Draws text or an `X` at the calculated position.
+- Draws text (respecting `style.fontSize`, `style.color`, and defaults) or an `X` at the calculated position.
 - Returns a `Uint8Array` of the filled PDF.
 
 > Note: This function is currently imported locally inside the app. In the future NPM package, it will be exposed as a first-class export.
@@ -267,11 +219,11 @@ Key ideas:
 
 Selected APIs (current, internal):
 
-- `useTemplateStore()` – main hook.
-	- `templates: PdfTemplate[]` – all saved templates.
-	- `activeTemplateId: string | null` – which template is currently selected.
-	- `currentPdfDataBase64: string | null` – PDF currently open in Designer.
-	- `currentFields: PdfField[]` – fields currently being edited.
+- `useTemplateStore()` - main hook.
+	- `templates: PdfTemplate[]` - all saved templates.
+	- `activeTemplateId: string | null` - which template is currently selected.
+	- `currentPdfDataBase64: string | null` - PDF currently open in Designer.
+	- `currentFields: PdfField[]` - fields currently being edited.
 
 - Actions for templates:
 	- `addTemplate(template)`
@@ -300,8 +252,8 @@ Although currently wired as Next.js pages, the Designer and Filler are intention
 
 The Designer combines:
 
-- `PdfCanvas` – Renders the PDF using pdf.js and manages page navigation.
-- `FieldOverlay` – Lets users draw, move, and resize fields directly on top of the PDF.
+- `PdfCanvas` - Renders the PDF using pdf.js and manages page navigation.
+- `FieldOverlay` - Lets users draw, move, and resize fields directly on top of the PDF.
 - A side panel for:
 	- Listing fields.
 	- Editing keys and types.
@@ -319,8 +271,11 @@ The Filler page:
 
 - Lets users choose a saved template.
 - Renders a form based on the template fields.
-- Uses the core engine to generate a filled PDF.
-- Shows a live preview of the generated PDF in-browser.
+- Shows a live pdf.js canvas preview with an interactive overlay.
+- Highlights fields when hovering data rows and selects the first matching field on click.
+- Allows move/resize and per-field styling from the preview.
+- Saves layout/style changes back to the current template or as a new template.
+- Uses the core engine to generate a filled PDF that matches the preview.
 
 ### Template Library
 
