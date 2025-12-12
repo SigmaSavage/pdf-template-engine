@@ -19,9 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span className="text-sm font-semibold tracking-wide text-sky-400 uppercase">
                   pdf-template-engine
                 </span>
-                <span className="hidden sm:inline text-xs text-slate-400">
-                  Visual designer • headless engine • UI examples
-                </span>
+                
               </Link>
               <nav className="flex items-center gap-3 text-xs sm:text-sm">
                 <Link

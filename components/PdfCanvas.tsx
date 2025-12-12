@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import FieldOverlayFixed from "@/components/FieldOverlayFixed";
 import { useTemplateStore } from "@/store/templateStore";
-import type { PdfField, PdfFieldType } from "@/types/pdf";
+import type { PdfField } from "@/types/pdf";
+import { detectFormFieldsFromPdf } from "@/lib/pdfFormDetection";
 
 function base64ToUint8Array(base64: string): Uint8Array {
     const binary = atob(base64);
@@ -14,82 +15,6 @@ function base64ToUint8Array(base64: string): Uint8Array {
     }
     return bytes;
 }
-
-// Best-effort detection of AcroForm fields using pdf.js annotations.
-// If anything fails, this simply returns an empty array and manual field
-// drawing still works as before.
-async function detectFormFieldsFromPdf(
-    data: ArrayBuffer,
-    pdfjs: any
-): Promise<PdfField[]> {
-    try {
-        if (!pdfjs || typeof pdfjs.getDocument !== "function") {
-            return [];
-        }
-
-        const bytes = new Uint8Array(data);
-        const loadingTask = pdfjs.getDocument({ data: bytes });
-        const pdf = await loadingTask.promise;
-        const results: PdfField[] = [];
-
-        for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
-            const page = await pdf.getPage(pageIndex + 1);
-            const annotations = await page.getAnnotations();
-            const viewport = page.getViewport({ scale: 1 });
-            const pageWidth = viewport.width;
-            const pageHeight = viewport.height;
-
-            for (const annot of annotations as any[]) {
-                if (!annot) continue;
-                if (annot.subtype !== "Widget") continue;
-                if (!annot.fieldName || !annot.rect) continue;
-
-                const rect = annot.rect as number[];
-                if (rect.length !== 4) continue;
-                const [x1, y1, x2, y2] = rect;
-                const w = x2 - x1;
-                const h = y2 - y1;
-                if (w <= 0 || h <= 0) continue;
-
-                // Convert from PDF bottom-left origin to overlay's top-left
-                // normalized coordinates.
-                const normX = x1 / pageWidth;
-                const normY = (pageHeight - y2) / pageHeight;
-                const normW = w / pageWidth;
-                const normH = h / pageHeight;
-
-                let type: PdfFieldType = "text";
-                const fieldType = (annot.fieldType || "").toString();
-                if (fieldType === "Btn") {
-                    // Treat button-type fields as checkboxes by default.
-                    type = "checkbox";
-                }
-
-                const key = String(annot.fieldName);
-
-                results.push({
-                    id: `auto_${pageIndex + 1}_${results.length}`,
-                    page: pageIndex,
-                    x: normX,
-                    y: normY,
-                    width: normW,
-                    height: normH,
-                    key,
-                    type,
-                });
-            }
-        }
-
-        console.log("[PdfCanvas] TODO remove debug: auto-detected form fields", {
-            count: results.length,
-        });
-        return results;
-    } catch (err) {
-        console.warn("[PdfCanvas] auto-detect form fields failed", err);
-        return [];
-    }
-}
-
 
 interface PdfCanvasProps {
     className?: string;
@@ -107,9 +32,11 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
     const [numPages, setNumPages] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [isDragOver, setIsDragOver] = useState(false);
 
     const setCurrentPdf = useTemplateStore((state) => state.setCurrentPdf);
     const setCurrentFields = useTemplateStore((state) => state.setCurrentFields);
+    const clearCurrent = useTemplateStore((state) => state.clearCurrent);
     const currentPdfDataBase64 = useTemplateStore((state) => state.currentPdfDataBase64);
 
     // Load pdf.js dynamically on the client and configure its worker
@@ -137,13 +64,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
         };
     }, []);
 
-    // Load PDF from file input
-    const handleFileChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
+    const processFile = async (file: File) => {
         if (file.type !== "application/pdf") {
             setErrorMessage("Please upload a PDF file.");
             return;
@@ -154,23 +75,13 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
         try {
             const arrayBuffer = await file.arrayBuffer();
 
-            // Use a copy of the buffer for auto-detection so the original
-            // remains intact for storage/encoding.
             let autoFields: PdfField[] = [];
             if (pdfjs && enableAutoDetect) {
-                const detectionBuffer = arrayBuffer.slice(0);
-                autoFields = await detectFormFieldsFromPdf(
-                    detectionBuffer,
-                    pdfjs
-                );
+                autoFields = await detectFormFieldsFromPdf(arrayBuffer, pdfjs);
             }
 
-            // Save PDF in global store so templates can use it; PdfCanvas will
-            // react to currentPdfDataBase64 and load the document.
             setCurrentPdf(arrayBuffer, file.name);
 
-            // If we found auto fields and auto-detect is enabled, use them;
-            // otherwise start from a blank field set.
             if (enableAutoDetect && autoFields.length > 0) {
                 setCurrentFields(autoFields);
             } else {
@@ -179,6 +90,51 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
         } catch (err) {
             console.error(err);
             setErrorMessage("Failed to load PDF. Check the console for details.");
+        }
+    };
+
+    // Load PDF from file input
+    const handleFileChange = async (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        await processFile(file);
+        event.target.value = "";
+    };
+
+    const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsDragOver(false);
+        const file = event.dataTransfer.files?.[0];
+        if (!file) return;
+        await processFile(file);
+    };
+
+    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsDragOver(true);
+    };
+
+    const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsDragOver(false);
+    };
+
+    const handleClear = () => {
+        clearCurrent();
+        setErrorMessage(null);
+
+        if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext("2d");
+            if (ctx) {
+                canvasRef.current.width = 1;
+                canvasRef.current.height = 1;
+                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            }
         }
     };
 
@@ -299,16 +255,28 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
         <div className={className}>
             {/* File uploader */}
             <div className="flex items-center justify-between gap-3 mb-3">
-                <label className="text-sm font-medium text-slate-200">
-                    Upload PDF
-                    <input
-                        key={fileInputKey}
-                        type="file"
-                        accept="application/pdf"
-                        onChange={handleFileChange}
-                        className="block mt-1 text-xs text-slate-300"
-                    />
-                </label>
+                <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-200 cursor-pointer">
+                        <span>Upload PDF</span>
+                        <span className="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white shadow-sm">
+                            Browse…
+                        </span>
+                        <input
+                            key={fileInputKey}
+                            type="file"
+                            accept="application/pdf"
+                            onChange={handleFileChange}
+                            className="hidden"
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        onClick={handleClear}
+                        className="px-3 py-1.5 rounded border border-slate-600 text-xs font-medium text-slate-200 hover:bg-slate-800"
+                    >
+                        Clear
+                    </button>
+                </div>
 
                 {numPages && (
                     <div className="flex items-center gap-2 text-xs text-slate-400">
@@ -345,10 +313,23 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
                 <p className="text-xs text-red-400 mb-2">{errorMessage}</p>
             )}
 
-            {/* Canvas area */}
-            <div className="border border-slate-800 rounded-md bg-slate-950 flex items-center justify-center overflow-auto">
+            {/* Canvas area / drag-and-drop target */}
+                <div
+                    className={`border rounded-md bg-slate-950 min-h-[160px] flex items-center justify-center overflow-auto ${
+                    isDragOver ? "border-sky-500 bg-slate-900/80" : "border-slate-800"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
                 <div className="relative inline-block">
                     <canvas ref={canvasRef} className="block" />
+                    {!pdfDoc && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-slate-400 pointer-events-none">
+                            <p>Drag and drop a PDF here</p>
+                            <p>or use the Browse button above.</p>
+                        </div>
+                    )}
                     {/* Only show overlay when a PDF is loaded */}
                     {pdfDoc && (
                         <FieldOverlayFixed

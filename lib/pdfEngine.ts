@@ -31,8 +31,9 @@ export async function fillPdfFromTemplate(options: {
   pdfBytes: Uint8Array | ArrayBuffer;
   fields: PdfField[];
   data: FillData;
+  removeFormFields?: boolean;
 }) {
-  const { pdfBytes, fields, data } = options;
+  const { pdfBytes, fields, data, removeFormFields } = options;
 
   const uint8 = toUint8Array(pdfBytes);
   const pdfDoc = await PDFDocument.load(uint8);
@@ -83,6 +84,21 @@ export async function fillPdfFromTemplate(options: {
     }
   }
 
+  if (removeFormFields) {
+    try {
+      const form = pdfDoc.getForm();
+      // Flatten all form fields so their current visual appearance
+      // is baked into the page content, and the interactive widgets
+      // themselves are removed. This keeps any black checkbox boxes
+      // or other visuals while stripping the form behavior.
+      if (typeof (form as any).flatten === "function") {
+        (form as any).flatten({ updateFieldAppearances: true });
+      }
+    } catch {
+      // if the document has no form or pdf-lib changes behavior, ignore
+    }
+  }
+
   // Returns a Uint8Array of the filled PDF
   const filledPdfBytes = await pdfDoc.save();
   return filledPdfBytes;
@@ -101,11 +117,25 @@ export async function exportFillablePdfFromTemplate(options: {
 
   const nameCounts: Record<string, number> = {};
 
+  // pdf-lib requires field names to have non-empty segments between
+  // periods (used for hierarchical names), and they should avoid
+  // odd characters. Normalize keys into safe base names.
+  const makeSafeFieldBaseName = (raw: string | undefined | null) => {
+    let base = (raw || "field").trim() || "field";
+    // Allow letters, digits, underscores, and periods; replace others.
+    base = base.replace(/[^A-Za-z0-9_.]/g, "_");
+    // Collapse multiple periods to a single, and trim leading/trailing.
+    base = base.replace(/\.+/g, ".");
+    base = base.replace(/^\.+|\.+$/g, "");
+    if (!base) base = "field";
+    return base;
+  };
+
   for (const field of fields) {
     const page = pages[field.page] ?? pages[0];
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
-    const baseName = (field.key || "field").trim() || "field";
+    const baseName = makeSafeFieldBaseName(field.key);
     const count = nameCounts[baseName] ?? 0;
     nameCounts[baseName] = count + 1;
     const fieldName = count === 0 ? baseName : `${baseName}_${count + 1}`;

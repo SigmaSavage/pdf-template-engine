@@ -1,13 +1,20 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
-import PdfCanvas from "@/components/PdfCanvas";
+import OneOffPdfCanvas from "@/components/OneOffPdfCanvas";
 import { fillPdfFromTemplate } from "@/lib/pdfEngine";
-import { useTemplateStore } from "@/store/templateStore";
-import type { PdfField, PdfFieldType } from "@/types/pdf";
+import type { PdfField } from "@/types/pdf";
+import type { OneOffField } from "@/components/OneOffOverlay";
 
-type ValueMap = Record<string, string | number | boolean>;
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
 
 function base64ToUint8Array(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -20,67 +27,22 @@ function base64ToUint8Array(base64: string): Uint8Array {
 }
 
 export default function OneOffFillPage() {
-  const currentPdfDataBase64 = useTemplateStore(
-    (state) => state.currentPdfDataBase64
-  );
-  const currentFields = useTemplateStore((state) => state.currentFields);
-
-  const [values, setValues] = useState<ValueMap>({});
-  const [defaultFontSize, setDefaultFontSize] = useState<number>(10);
+  const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+  const [fields, setFields] = useState<OneOffField[]>([]);
+  const [defaultFontSize, setDefaultFontSize] = useState<number>(14);
   const [defaultColor, setDefaultColor] = useState<string>("#000000");
   const [isFilling, setIsFilling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const schemaKeys: string[] = useMemo(() => {
-    const unique = new Set<string>();
-    for (const f of currentFields) {
-      const key = f.key.trim();
-      if (key) unique.add(key);
-    }
-    return Array.from(unique);
-  }, [currentFields]);
-
-  const keyTypes: Record<string, PdfFieldType> = useMemo(() => {
-    const map: Record<string, PdfFieldType> = {};
-    for (const field of currentFields) {
-      if (!map[field.key]) {
-        map[field.key] = field.type;
-      }
-    }
-    return map;
-  }, [currentFields]);
-
-  const handleValueChange = (key: string, type: PdfFieldType, value: any) => {
-    setValues((prev) => ({
-      ...prev,
-      [key]:
-        type === "number"
-          ? value === ""
-            ? ""
-            : Number.isNaN(Number(value))
-            ? value
-            : Number(value)
-          : type === "checkbox"
-          ? Boolean(value)
-          : value,
-    }));
-  };
-
-  const handleCheckboxChange = (key: string, checked: boolean) => {
-    setValues((prev) => ({
-      ...prev,
-      [key]: checked,
-    }));
-  };
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setErrorMessage(null);
 
-    if (!currentPdfDataBase64) {
+    if (!pdfBase64) {
       setErrorMessage("Upload a PDF first.");
       return;
     }
-    if (currentFields.length === 0) {
+    if (fields.length === 0) {
       setErrorMessage("Draw at least one field on the PDF.");
       return;
     }
@@ -88,17 +50,20 @@ export default function OneOffFillPage() {
     try {
       setIsFilling(true);
 
-      const data: ValueMap = {};
-      for (const key of schemaKeys) {
-        const v = values[key];
-        data[key] = v ?? "";
-      }
-
-      const pdfBytes = base64ToUint8Array(currentPdfDataBase64);
-      const effectiveFields: PdfField[] = currentFields.map((field) => {
+      const data: Record<string, string> = {};
+      const effectiveFields: PdfField[] = fields.map((field) => {
         const style = field.style ?? {};
+        const key = field.id;
+        data[key] = field.value ?? "";
         return {
-          ...field,
+          id: field.id,
+          page: field.page,
+          x: field.x,
+          y: field.y,
+          width: field.width,
+          height: field.height,
+          key,
+          type: "text",
           style: {
             ...style,
             fontSize: style.fontSize ?? defaultFontSize,
@@ -106,11 +71,12 @@ export default function OneOffFillPage() {
           },
         };
       });
-
+      const pdfBytes = base64ToUint8Array(pdfBase64);
       const filledBytes = await fillPdfFromTemplate({
         pdfBytes,
         fields: effectiveFields,
         data,
+        removeFormFields: true,
       });
 
       const blob = new Blob([filledBytes.buffer as ArrayBuffer], {
@@ -161,20 +127,31 @@ export default function OneOffFillPage() {
       <main className="flex-1 grid grid-cols-1 md:grid-cols-[2fr,1fr] gap-4">
         <section className="border border-slate-800 rounded-lg p-3">
           <p className="text-sm text-slate-400 mb-2">Upload &amp; Place Fields</p>
-          <PdfCanvas enableAutoDetect={false} />
+          <OneOffPdfCanvas
+            fields={fields}
+            onFieldsChange={setFields}
+            onPdfBytesChange={(bytes) => {
+              setPdfBase64(bytes ? uint8ArrayToBase64(bytes) : null);
+              setErrorMessage(null);
+            }}
+            defaultFontSize={defaultFontSize}
+            defaultColor={defaultColor}
+            selectedFieldId={selectedFieldId}
+            onSelectField={setSelectedFieldId}
+          />
         </section>
 
         <aside className="border border-slate-800 rounded-lg p-3 space-y-3">
-          <h2 className="text-lg font-medium">Enter Values &amp; Download</h2>
+          <h2 className="text-lg font-medium">Style &amp; Download</h2>
 
-          {!currentPdfDataBase64 ? (
+          {!pdfBase64 ? (
             <p className="text-sm text-slate-400">
               Upload a PDF in the panel on the left to start.
             </p>
-          ) : currentFields.length === 0 ? (
+          ) : fields.length === 0 ? (
             <p className="text-sm text-slate-400">
-              Click and drag on the PDF to create one or more fields. Then enter
-              values for each key here.
+              Click and drag on the PDF to draw text boxes. When you release the
+              mouse, enter the value you want rendered inside each box.
             </p>
           ) : (
             <>
@@ -206,50 +183,91 @@ export default function OneOffFillPage() {
                   />
                 </div>
                 <p className="text-[10px] text-slate-500">
-                  Used for all fields when generating the filled PDF.
+                  Used for all boxes when generating the filled PDF.
                 </p>
               </div>
 
-              <div className="max-h-[55vh] overflow-auto space-y-2 pr-1 mt-2">
-                {schemaKeys.map((key) => {
-                  const type = keyTypes[key] ?? "text";
-                  const value = values[key] ?? (type === "checkbox" ? false : "");
+              {(() => {
+                const field = fields.find((f) => f.id === selectedFieldId);
+                if (!field) return null;
 
-                  return (
-                    <div
-                      key={key}
-                      className="flex items-center gap-2 border border-slate-800 rounded px-2 py-1 text-xs"
-                    >
-                      <div className="flex-1">
-                        <div className="text-[11px] font-mono text-slate-300">
-                          {key}
-                          <span className="ml-1 text-slate-500">({type})</span>
-                        </div>
-                      </div>
+                const fieldFontSize = field.style?.fontSize ?? defaultFontSize;
+                const fieldColor = field.style?.color ?? defaultColor;
 
-                      {type === "checkbox" ? (
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={Boolean(value)}
-                          onChange={(e) =>
-                            handleCheckboxChange(key, e.target.checked)
-                          }
-                        />
-                      ) : (
-                        <input
-                          className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-sky-500"
-                          value={String(value)}
-                          onChange={(e) =>
-                            handleValueChange(key, type, e.target.value)
-                          }
-                          placeholder="Value"
-                        />
-                      )}
+                return (
+                  <div className="pt-2 border-t border-slate-800 space-y-2 mt-2">
+                    <div className="font-semibold text-slate-200 text-[11px]">
+                      Box value &amp; style
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="space-y-1">
+                      <span className="block text-[10px] text-slate-400">Value</span>
+                      <input
+                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:border-sky-500"
+                        value={field.value}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setFields((prev) =>
+                            prev.map((f) =>
+                              f.id === field.id ? { ...f, value: next } : f
+                            )
+                          );
+                        }}
+                        placeholder="Text to render inside this box"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-slate-400">Font size</span>
+                      <input
+                        type="number"
+                        className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 w-20 text-[11px]"
+                        value={fieldFontSize}
+                        min={6}
+                        max={72}
+                        onChange={(e) => {
+                          const n = Number(e.target.value) || defaultFontSize;
+                          setFields((prev) =>
+                            prev.map((f) =>
+                              f.id === field.id
+                                ? {
+                                    ...f,
+                                    style: {
+                                      ...(f.style ?? {}),
+                                      fontSize: n,
+                                    },
+                                  }
+                                : f
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-slate-400">Color</span>
+                      <input
+                        type="color"
+                        className="w-8 h-5"
+                        value={fieldColor}
+                        onChange={(e) => {
+                          const nextColor = e.target.value || defaultColor;
+                          setFields((prev) =>
+                            prev.map((f) =>
+                              f.id === field.id
+                                ? {
+                                    ...f,
+                                    style: {
+                                      ...(f.style ?? {}),
+                                      color: nextColor,
+                                    },
+                                  }
+                                : f
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {errorMessage && (
                 <p className="text-xs text-red-400 mt-2">{errorMessage}</p>
@@ -259,7 +277,7 @@ export default function OneOffFillPage() {
                 <button
                   className="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-xs font-medium text-white disabled:opacity-50"
                   onClick={handleGenerate}
-                  disabled={!currentPdfDataBase64 || currentFields.length === 0 || isFilling}
+                  disabled={!pdfBase64 || fields.length === 0 || isFilling}
                 >
                   {isFilling ? "Working…" : "Download Filled PDF"}
                 </button>
