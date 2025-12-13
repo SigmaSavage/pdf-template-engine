@@ -153,6 +153,9 @@ function FillPageInner() {
         pdfBytes,
         fields: effectiveFields,
         data,
+        // Always flatten/remove any AcroForm fields in the output so
+        // filled PDFs from this flow are not fillable.
+        removeFormFields: true,
       });
 
       const blob = new Blob([filledBytes.buffer as ArrayBuffer], {

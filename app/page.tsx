@@ -11,7 +11,7 @@ export default function HomePage() {
         <p className="text-slate-400 text-sm sm:text-base">
           This portfolio project showcases a full PDF template engine: a visual designer,
           a live filler with canvas overlay, a template library, and a one-off "DocHub-style"
-          fill experienceall powered by a reusable headless filling engine.
+          fill experience, all powered by a reusable headless filling engine.
         </p>
       </section>
 

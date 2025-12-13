@@ -37,7 +37,8 @@ async function detectFormFieldsForOneOff(
     height: f.height,
     value: "",
     type: f.type === "checkbox" ? "checkbox" : "text",
-    ...(f.type === "checkbox" ? { checked: true } : {}),
+    // Auto-detected checkboxes start unchecked; user can opt-in
+    ...(f.type === "checkbox" ? { checked: false } : {}),
   }));
 }
 

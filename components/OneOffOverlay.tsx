@@ -348,7 +348,7 @@ export default function OneOffOverlay({
     setPendingColor(field.style?.color ?? defaultColor);
     setPendingType(field.type || "text");
     setPendingChecked(
-      field.type === "checkbox" ? field.checked ?? true : true
+      field.type === "checkbox" ? field.checked ?? false : true
     );
     onSelectField(field.id);
   };
@@ -458,6 +458,13 @@ export default function OneOffOverlay({
                         {field.value}
                       </div>
                     )}
+                {/* Drag whole box by grabbing inside */}
+                <div
+                  className="absolute inset-0 cursor-move"
+                  onMouseDown={(e) =>
+                    beginDrag("move", field.id, { x: left, y: top, width, height }, e)
+                  }
+                />
                 <div
                   className="absolute w-2 h-2 -right-1 -top-1 bg-sky-300 border border-slate-900 rounded-full cursor-nesw-resize"
                   onMouseDown={(e) =>

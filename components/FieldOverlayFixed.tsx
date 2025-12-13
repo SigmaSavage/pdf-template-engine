@@ -361,7 +361,10 @@ export default function FieldOverlayFixed({ pageNumber }: FieldOverlayProps) {
       {/* Persistent field rectangles for this page */}
       {overlayRect &&
         currentFields
-          .filter((field) => field.page === pageNumber - 1)
+          .filter(
+            (field) =>
+              field.page === pageNumber - 1 && field.id !== editingFieldId
+          )
           .map((field) => {
             console.log("[FieldOverlayFixed] render field", {
               id: field.id,

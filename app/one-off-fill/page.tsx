@@ -29,7 +29,7 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export default function OneOffFillPage() {
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [fields, setFields] = useState<OneOffField[]>([]);
-  const [defaultFontSize, setDefaultFontSize] = useState<number>(14);
+  const [defaultFontSize, setDefaultFontSize] = useState<number>(12);
   const [defaultColor, setDefaultColor] = useState<string>("#000000");
   const [isFilling, setIsFilling] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -55,7 +55,9 @@ export default function OneOffFillPage() {
         const style = field.style ?? {};
         const key = field.id;
         if (field.type === "checkbox") {
-          data[key] = field.checked ?? true;
+          // Treat missing "checked" as false so auto-detected
+          // checkboxes are not assumed to be checked.
+          data[key] = field.checked ?? false;
         } else {
           data[key] = field.value ?? "";
         }
@@ -111,20 +113,6 @@ export default function OneOffFillPage() {
             Upload any PDF, draw fields directly on it, enter values, and download a
             flattened filled PDF without saving a reusable template.
           </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <Link
-            href="/designer"
-            className="px-3 py-1 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
-          >
-            ← Back to Designer
-          </Link>
-          <Link
-            href="/fill"
-            className="px-3 py-1 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
-          >
-            Go to Fill &amp; Review →
-          </Link>
         </div>
       </header>
 
