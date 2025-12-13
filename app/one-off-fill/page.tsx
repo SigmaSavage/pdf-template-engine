@@ -50,11 +50,15 @@ export default function OneOffFillPage() {
     try {
       setIsFilling(true);
 
-      const data: Record<string, string> = {};
+      const data: Record<string, string | boolean> = {};
       const effectiveFields: PdfField[] = fields.map((field) => {
         const style = field.style ?? {};
         const key = field.id;
-        data[key] = field.value ?? "";
+        if (field.type === "checkbox") {
+          data[key] = field.checked ?? true;
+        } else {
+          data[key] = field.value ?? "";
+        }
         return {
           id: field.id,
           page: field.page,
@@ -63,7 +67,7 @@ export default function OneOffFillPage() {
           width: field.width,
           height: field.height,
           key,
-          type: "text",
+          type: field.type || "text",
           style: {
             ...style,
             fontSize: style.fontSize ?? defaultFontSize,
@@ -150,8 +154,9 @@ export default function OneOffFillPage() {
             </p>
           ) : fields.length === 0 ? (
             <p className="text-sm text-slate-400">
-              Click and drag on the PDF to draw text boxes. When you release the
-              mouse, enter the value you want rendered inside each box.
+              Click and drag on the PDF to draw boxes. When you release the
+              mouse, configure the value (for text) or checked state (for
+              checkboxes) and style.
             </p>
           ) : (
             <>
@@ -193,28 +198,77 @@ export default function OneOffFillPage() {
 
                 const fieldFontSize = field.style?.fontSize ?? defaultFontSize;
                 const fieldColor = field.style?.color ?? defaultColor;
+                const fieldType = field.type || "text";
 
                 return (
                   <div className="pt-2 border-t border-slate-800 space-y-2 mt-2">
                     <div className="font-semibold text-slate-200 text-[11px]">
                       Box value &amp; style
                     </div>
-                    <div className="space-y-1">
-                      <span className="block text-[10px] text-slate-400">Value</span>
-                      <input
-                        className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:border-sky-500"
-                        value={field.value}
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-slate-400">Type</span>
+                      <select
+                        className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px]"
+                        value={fieldType}
                         onChange={(e) => {
-                          const next = e.target.value;
+                          const nextType = e.target.value as "text" | "checkbox";
                           setFields((prev) =>
                             prev.map((f) =>
-                              f.id === field.id ? { ...f, value: next } : f
+                              f.id === field.id
+                                ? {
+                                    ...f,
+                                    type: nextType,
+                                    ...(nextType === "checkbox"
+                                      ? { checked: f.checked ?? true, value: "" }
+                                      : {}),
+                                  }
+                                : f
                             )
                           );
                         }}
-                        placeholder="Text to render inside this box"
-                      />
+                      >
+                        <option value="text">Text</option>
+                        <option value="checkbox">Checkbox</option>
+                      </select>
+                      {fieldType === "checkbox" && (
+                        <label className="flex items-center gap-1 text-[11px] text-slate-300">
+                          <input
+                            type="checkbox"
+                            className="accent-emerald-500"
+                            checked={field.checked ?? true}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFields((prev) =>
+                                prev.map((f) =>
+                                  f.id === field.id ? { ...f, checked } : f
+                                )
+                              );
+                            }}
+                          />
+                          <span>Checked</span>
+                        </label>
+                      )}
                     </div>
+                    {fieldType === "text" && (
+                      <div className="space-y-1">
+                        <span className="block text-[10px] text-slate-400">
+                          Value
+                        </span>
+                        <input
+                          className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:border-sky-500"
+                          value={field.value}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setFields((prev) =>
+                              prev.map((f) =>
+                                f.id === field.id ? { ...f, value: next } : f
+                              )
+                            );
+                          }}
+                          placeholder="Text to render inside this box"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <span className="w-16 text-slate-400">Font size</span>
                       <input

@@ -22,12 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 
               </Link>
               <nav className="flex items-center gap-3 text-xs sm:text-sm">
-                <Link
-                  href="/"
-                  className="px-2 py-1 rounded hover:bg-slate-900 text-slate-200"
-                >
-                  Home
-                </Link>
+                
                 <Link
                   href="/about"
                   className="px-2 py-1 rounded hover:bg-slate-900 text-slate-200"
@@ -48,10 +43,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   Open Designer
                 </Link>
                 <Link
-                  href="/fill"
+                  href="/one-off-fill"
                   className="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-slate-50 font-medium"
                 >
-                  Fill &amp; Review
+                  Fill &amp; Download
                 </Link>
               </nav>
             </div>

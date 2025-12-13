@@ -36,7 +36,8 @@ async function detectFormFieldsForOneOff(
     width: f.width,
     height: f.height,
     value: "",
-    // one-off flow doesn't care about keys/types; user just sees boxes
+    type: f.type === "checkbox" ? "checkbox" : "text",
+    ...(f.type === "checkbox" ? { checked: true } : {}),
   }));
 }
 
@@ -326,7 +327,7 @@ export default function OneOffPdfCanvas({
       )}
 
       <div
-        className={`border rounded-md bg-slate-950 min-h-[160px] flex items-center justify-center overflow-auto ${
+        className={`border rounded-md bg-slate-950 min-h-[200px] flex items-center justify-center overflow-auto ${
           isDragOver ? "border-sky-500 bg-slate-900/80" : "border-slate-800"
         }`}
         onDragOver={handleDragOver}
@@ -336,9 +337,11 @@ export default function OneOffPdfCanvas({
         <div className="relative inline-block">
           <canvas ref={canvasRef} className="block" />
           {!pdfDoc && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-slate-400 pointer-events-none">
-              <p>Drag and drop a PDF here</p>
-              <p>or use the Browse button above.</p>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="flex flex-col items-center justify-center text-xs text-slate-400 text-center space-y-1 min-w-[400px] max-w-[60%]">
+                <p>Drag and drop a PDF here</p>
+                <p>or use the Browse button above.</p>
+              </div>
             </div>
           )}
           {pdfDoc && (

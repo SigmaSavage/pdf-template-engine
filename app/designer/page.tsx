@@ -266,6 +266,37 @@ export default function DesignerPage() {
     }
   };
 
+  // Warn user if they try to refresh/close the tab with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges) return;
+      event.preventDefault();
+      // Setting returnValue is required for some browsers to show a prompt
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  // Confirm when navigating away via in-page links if there are unsaved changes
+  const handleNavAway = (
+    event: React.MouseEvent<HTMLAnchorElement, MouseEvent>
+  ) => {
+    if (!hasUnsavedChanges) return;
+
+    const confirmLeave = window.confirm(
+      "You have unsaved changes for this template. Leave this page and discard those changes?"
+    );
+
+    if (!confirmLeave) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
 
   return (
     <div className="min-h-screen flex flex-col gap-4 p-6">
@@ -280,14 +311,16 @@ export default function DesignerPage() {
           <Link
             href="/templates"
             className="px-3 py-1 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+            onClick={handleNavAway}
           >
             Templates Library
           </Link>
           <Link
             href="/fill"
             className="px-3 py-1 rounded border border-slate-600 text-slate-200 hover:bg-slate-800"
+            onClick={handleNavAway}
           >
-            Go to Fill &amp; Review →
+            Go to Fill &amp; Review 	
           </Link>
         </div>
       </header>

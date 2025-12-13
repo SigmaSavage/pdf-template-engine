@@ -12,6 +12,8 @@ export interface OneOffField {
   width: number;
   height: number;
   value: string;
+  type: "text" | "checkbox";
+  checked?: boolean;
   style?: PdfFieldStyle;
 }
 
@@ -69,6 +71,9 @@ export default function OneOffOverlay({
   const [pendingFontSize, setPendingFontSize] = useState<string>("");
   const [pendingColor, setPendingColor] = useState<string>("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+
+  const [pendingType, setPendingType] = useState<"text" | "checkbox">("text");
+  const [pendingChecked, setPendingChecked] = useState<boolean>(true);
 
   const [draggingFieldId, setDraggingFieldId] = useState<string | null>(null);
   const [dragMode, setDragMode] = useState<
@@ -241,6 +246,8 @@ export default function OneOffOverlay({
       setPendingValue("");
       setPendingFontSize(String(defaultFontSize));
       setPendingColor(defaultColor);
+       setPendingType("text");
+       setPendingChecked(true);
       setEditingFieldId(null);
     }
 
@@ -256,6 +263,8 @@ export default function OneOffOverlay({
     setPendingFontSize("");
     setPendingColor("");
     setEditingFieldId(null);
+    setPendingType("text");
+    setPendingChecked(true);
   };
 
   const handleConfirm = () => {
@@ -279,6 +288,8 @@ export default function OneOffOverlay({
       }
     }
 
+    const effectiveType = pendingType || "text";
+
     const base: OneOffField = {
       id: editingFieldId || uuidv4(),
       page: pageNumber - 1,
@@ -286,7 +297,9 @@ export default function OneOffOverlay({
       y: pendingRectNorm.y,
       width: pendingRectNorm.width,
       height: pendingRectNorm.height,
-      value: pendingValue,
+      value: effectiveType === "checkbox" ? "" : pendingValue,
+      type: effectiveType,
+      ...(effectiveType === "checkbox" ? { checked: pendingChecked } : {}),
       ...(style ? { style } : {}),
     };
 
@@ -333,6 +346,10 @@ export default function OneOffOverlay({
         : String(defaultFontSize)
     );
     setPendingColor(field.style?.color ?? defaultColor);
+    setPendingType(field.type || "text");
+    setPendingChecked(
+      field.type === "checkbox" ? field.checked ?? true : true
+    );
     onSelectField(field.id);
   };
 
@@ -402,6 +419,14 @@ export default function OneOffOverlay({
             const width = isActiveDrag ? dragRectPx!.width : baseWidth;
             const height = isActiveDrag ? dragRectPx!.height : baseHeight;
 
+            const displayStyle: React.CSSProperties = {
+              fontSize:
+                field.style?.fontSize != null
+                  ? `${field.style.fontSize}px`
+                  : "14px",
+              color: field.style?.color || "#000000",
+            };
+
             return (
               <div
                 key={field.id}
@@ -416,34 +441,23 @@ export default function OneOffOverlay({
                   beginEditField(field);
                 }}
               >
-                {field.value && (
-                  <div
-                    className="w-full h-full flex items-center justify-start px-1 leading-snug break-words"
-                    style={{
-                      fontSize:
-                        field.style?.fontSize != null
-                          ? `${field.style.fontSize}px`
-                          : "14px",
-                      color: field.style?.color || "#000000",
-                    }}
-                  >
-                    {field.value}
-                  </div>
-                )}
-
-                {/* Drag/resize affordances similar to fill mode */}
-                <div
-                  className="absolute inset-0 cursor-move"
-                  onMouseDown={(e) =>
-                    beginDrag("move", field.id, { x: left, y: top, width, height }, e)
-                  }
-                />
-                <div
-                  className="absolute w-2 h-2 -left-1 -top-1 bg-sky-300 border border-slate-900 rounded-full cursor-nwse-resize"
-                  onMouseDown={(e) =>
-                    beginDrag("nw", field.id, { x: left, y: top, width, height }, e)
-                  }
-                />
+                {field.type === "checkbox"
+                  ? field.checked && (
+                      <div
+                        className="w-full h-full flex items-center justify-center leading-snug"
+                        style={displayStyle}
+                      >
+                        X
+                      </div>
+                    )
+                  : field.value && (
+                      <div
+                        className="w-full h-full flex items-center justify-start px-1 leading-snug break-words"
+                        style={displayStyle}
+                      >
+                        {field.value}
+                      </div>
+                    )}
                 <div
                   className="absolute w-2 h-2 -right-1 -top-1 bg-sky-300 border border-slate-900 rounded-full cursor-nesw-resize"
                   onMouseDown={(e) =>
@@ -483,13 +497,45 @@ export default function OneOffOverlay({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col gap-1">
-              <input
-                className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] min-w-[160px] focus:outline-none focus:border-sky-500"
-                placeholder="Text to render in this box"
-                value={pendingValue}
-                onChange={(e) => setPendingValue(e.target.value)}
-                autoFocus
-              />
+              <div className="flex items-center gap-2 mb-1">
+                <label className="flex items-center gap-1 text-[10px] text-slate-300">
+                  <span>Type</span>
+                  <select
+                    className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:border-sky-500"
+                    value={pendingType}
+                    onChange={(e) => {
+                      const nextType = e.target.value as "text" | "checkbox";
+                      setPendingType(nextType);
+                      if (nextType === "checkbox") {
+                        setPendingChecked(true);
+                      }
+                    }}
+                  >
+                    <option value="text">Text</option>
+                    <option value="checkbox">Checkbox</option>
+                  </select>
+                </label>
+                {pendingType === "checkbox" && (
+                  <label className="flex items-center gap-1 text-[10px] text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="accent-emerald-500"
+                      checked={pendingChecked}
+                      onChange={(e) => setPendingChecked(e.target.checked)}
+                    />
+                    <span>Checked</span>
+                  </label>
+                )}
+              </div>
+              {pendingType === "text" && (
+                <input
+                  className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] min-w-[160px] focus:outline-none focus:border-sky-500"
+                  placeholder="Text to render in this box"
+                  value={pendingValue}
+                  onChange={(e) => setPendingValue(e.target.value)}
+                  autoFocus
+                />
+              )}
               <div className="flex items-center gap-2">
                 <label className="flex items-center gap-1 text-[10px] text-slate-300">
                   <span>Size</span>
