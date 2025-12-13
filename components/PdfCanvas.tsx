@@ -25,6 +25,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const renderTaskRef = useRef<any>(null);
     const [canvasVersion, setCanvasVersion] = useState(0);
+    const [zoom, setZoom] = useState(1); // 1 = 100%
     const [fileInputKey, setFileInputKey] = useState(0);
     const [pdfjs, setPdfjs] = useState<any | null>(null);
     const [pdfDoc, setPdfDoc] = useState<any>(null); // 'any' at the boundary for pdf.js
@@ -176,6 +177,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
                 setPdfDoc(pdf);
                 setNumPages(pdf.numPages);
                 setPageNumber(1);
+                setZoom(1);
             } catch (err) {
                 console.error(err);
                 setErrorMessage("Failed to load PDF. Check the console for details.");
@@ -187,7 +189,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
         loadFromStore();
     }, [currentPdfDataBase64, pdfjs]);
 
-    // Render the current page whenever pdfDoc or pageNumber changes
+    // Render the current page whenever pdfDoc, pageNumber, or zoom changes
     useEffect(() => {
         const renderPage = async () => {
             if (!pdfDoc || !canvasRef.current) return;
@@ -202,7 +204,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
             }
 
             const page = await pdfDoc.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: 1.5 });
+            const viewport = page.getViewport({ scale: 1.5 * zoom });
 
             const canvas = canvasRef.current;
             const context = canvas.getContext("2d");
@@ -249,7 +251,7 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
                 }
             }
         };
-    }, [pdfDoc, pageNumber]);
+    }, [pdfDoc, pageNumber, zoom]);
 
     return (
         <div className={className}>
@@ -301,6 +303,33 @@ export default function PdfCanvas({ className, enableAutoDetect = true }: PdfCan
                         >
                             Next
                         </button>
+                        {pdfDoc && (
+                            <div className="flex items-center gap-1 ml-3">
+                                <button
+                                    type="button"
+                                    className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                                    onClick={() =>
+                                        setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))
+                                    }
+                                    disabled={zoom <= 0.5}
+                                >
+                                    -
+                                </button>
+                                <span className="w-12 text-center">
+                                    {Math.round(zoom * 100)}%
+                                </span>
+                                <button
+                                    type="button"
+                                    className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                                    onClick={() =>
+                                        setZoom((z) => Math.min(3, Math.round((z + 0.1) * 10) / 10))
+                                    }
+                                    disabled={zoom >= 3}
+                                >
+                                    +
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

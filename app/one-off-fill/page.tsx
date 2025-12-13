@@ -14,6 +14,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+  //TODO change this above to suggested javascript type, as btoa is no longer viable
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {

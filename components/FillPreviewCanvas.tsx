@@ -48,6 +48,7 @@ export default function FillPreviewCanvas({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [overlayVersion, setOverlayVersion] = useState(0);
+  const [zoom, setZoom] = useState(1); // 1 = 100%
 
   // Load pdf.js dynamically on the client and configure its worker
   useEffect(() => {
@@ -93,6 +94,7 @@ export default function FillPreviewCanvas({
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
         setPageNumber(1);
+        setZoom(1);
       } catch (err) {
         console.error("Failed to load PDF for FillPreviewCanvas", err);
         setErrorMessage("Failed to load PDF for preview.");
@@ -104,7 +106,7 @@ export default function FillPreviewCanvas({
     loadFromTemplate();
   }, [pdfjs, template.id, template.pdfDataBase64]);
 
-  // Render the current page whenever pdfDoc or pageNumber changes
+  // Render the current page whenever pdfDoc, pageNumber, or zoom changes
   useEffect(() => {
     const renderPage = async () => {
       if (!pdfDoc || !canvasRef.current) return;
@@ -118,7 +120,7 @@ export default function FillPreviewCanvas({
       }
 
       const page = await pdfDoc.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 1.3 });
+      const viewport = page.getViewport({ scale: 1.3 * zoom });
 
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
@@ -166,33 +168,62 @@ export default function FillPreviewCanvas({
         }
       }
     };
-  }, [pdfDoc, pageNumber]);
+  }, [pdfDoc, pageNumber, zoom]);
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-2 text-xs text-slate-400">
         <span>Live PDF preview</span>
-        {numPages && numPages > 1 && (
+        {pdfDoc && (
           <div className="flex items-center gap-2">
-            <button
-              className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
-              onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
-              disabled={pageNumber <= 1}
-            >
-              Prev
-            </button>
-            <span>
-              Page {pageNumber} / {numPages}
-            </span>
-            <button
-              className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
-              onClick={() =>
-                setPageNumber((p) => (numPages ? Math.min(numPages, p + 1) : p))
-              }
-              disabled={numPages != null && pageNumber >= numPages}
-            >
-              Next
-            </button>
+            {numPages && numPages > 1 && (
+              <>
+                <button
+                  className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                  onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
+                  disabled={pageNumber <= 1}
+                >
+                  Prev
+                </button>
+                <span>
+                  Page {pageNumber} / {numPages}
+                </span>
+                <button
+                  className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                  onClick={() =>
+                    setPageNumber((p) => (numPages ? Math.min(numPages, p + 1) : p))
+                  }
+                  disabled={numPages != null && pageNumber >= numPages}
+                >
+                  Next
+                </button>
+              </>
+            )}
+            <div className="flex items-center gap-1 ml-1">
+              <button
+                type="button"
+                className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                onClick={() =>
+                  setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))
+                }
+                disabled={zoom <= 0.5}
+              >
+                -
+              </button>
+              <span className="w-12 text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                className="px-2 py-1 border border-slate-700 rounded disabled:opacity-40"
+                onClick={() =>
+                  setZoom((z) => Math.min(3, Math.round((z + 0.1) * 10) / 10))
+                }
+                disabled={zoom >= 3}
+              >
+                +
+              </button>
+            </div>
           </div>
         )}
       </div>
