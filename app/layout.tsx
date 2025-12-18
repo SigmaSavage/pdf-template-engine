@@ -2,6 +2,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title: "PDF Template Engine",
@@ -63,6 +64,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </footer>
         </div>
+        <Analytics />
       </body>
     </html>
   );
